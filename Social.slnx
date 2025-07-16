@@ -1,1 +1,10 @@
-﻿<Solution />
+﻿<Solution>
+  <Folder Name="/Compose/" />
+  <Folder Name="/Services/" />
+  <Folder Name="/Services/Infrastructure/">
+    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication.Abstractions\Social.Infrastructure.Communication.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication\Social.Infrastructure.Communication.csproj" Type="Classic C#" />
+    <Project Path="Src\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/Tests/" />
+</Solution>
