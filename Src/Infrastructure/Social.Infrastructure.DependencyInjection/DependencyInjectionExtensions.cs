@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Social.Infrastructure.Communication;
 using Social.Infrastructure.Communication.Abstractions;
 
@@ -18,14 +17,13 @@ public static class DependencyInjectionExtensions
 
         foreach (var serviceBusOption in serviceBusOptions)
         {
-            services.AddKeyedSingleton<IServiceBus, AzureServiceBus>(serviceBusOption.Route,
+            services.AddKeyedSingleton<IServiceBus, AzureServiceBus>(serviceBusOption.Key,
                 (sp, _) =>
                 {
                     var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
                     var config = sp.GetRequiredService<IConfiguration>();
                     var env = sp.GetRequiredService<IHostEnvironment>();
-                    var logger = sp.GetRequiredService<ILogger<AzureServiceBus>>();
-                    return new AzureServiceBus(serviceBusOption, logger, config, env, scopeFactory);
+                    return new AzureServiceBus(serviceBusOption, config, env, scopeFactory);
                 });
         }
 

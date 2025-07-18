@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+        <PackageReference Include="MediatR" Version="13.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.7"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.7"/>
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.12.1"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.7"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\..\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\Social.Services.Shared\Social.Services.Shared.csproj" />
+        <ProjectReference Include="..\Social.Services.User.Persistence\Social.Services.User.Persistence.csproj"/>
+    </ItemGroup>
+
+</Project>
