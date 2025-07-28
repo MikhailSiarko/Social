@@ -25,7 +25,7 @@ public static class UserFollow
                     [FromServices] IApplicationService appService,
                     CancellationToken token) =>
                 {
-                    var authResult = await appService.FollowUserAsync(model.UserId, token);
+                    var authResult = await appService.UnfollowUserAsync(model.UserId, token);
                     return authResult.ToHttpResult();
                 }
             )
