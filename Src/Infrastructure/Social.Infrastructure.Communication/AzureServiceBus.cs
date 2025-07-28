@@ -4,14 +4,14 @@ using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Social.Infrastructure.Communication.Abstractions;
+using Social.Shared;
+using Social.Shared.Errors;
 
 namespace Social.Infrastructure.Communication;
 
 public sealed class AzureServiceBus(
     ServiceBusOptions options,
-    ILogger<AzureServiceBus> logger,
     IConfiguration configuration,
     IHostEnvironment environment,
     IServiceScopeFactory serviceScopeFactory) : IServiceBus, IAsyncDisposable
@@ -20,66 +20,63 @@ public sealed class AzureServiceBus(
     private readonly Dictionary<string, List<Type>> _handlers = new();
     private readonly HashSet<Type> _eventTypes = [];
 
-    private readonly ServiceBusClient _serviceBusClient = new(configuration.GetConnectionString("ServiceBus")!,
+    private readonly ServiceBusClient _serviceBusClient = new(configuration.GetConnectionString("Messaging")!,
         new ServiceBusClientOptions
         {
             Identifier = environment.ApplicationName
         });
 
-    private Dictionary<string, ServiceBusProcessor>? _processors;
-    private readonly List<CancellationTokenSource> _cancellationTokenSources = [];
+    private readonly List<ServiceBusProcessor> _processors = [];
 
-    public async Task PublishAsync(Message message, CancellationToken cancellationToken = default)
+    public async Task<Result<Unit>> PublishAsync(Message message, CancellationToken cancellationToken = default)
     {
-        if (_cancellationTokenSource.IsCancellationRequested || cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning("Can't publish a message since a cancellation token is already cancelled: {MessageType}",
-                message.GetType().Name);
-            return;
-        }
-
         try
         {
-            await using var sender = _serviceBusClient.CreateSender(options.Route);
+            using var cts =
+                CancellationTokenSource.CreateLinkedTokenSource(_cancellationTokenSource.Token, cancellationToken);
+            await using var sender = _serviceBusClient.CreateSender(options.Service);
             var messageType = message.GetType();
             var serviceBusMessage = new ServiceBusMessage(JsonSerializer.Serialize(message, messageType));
             serviceBusMessage.ApplicationProperties.Add("MessageType", messageType.Name);
-            await sender.SendMessageAsync(serviceBusMessage, cancellationToken);
+            await sender.SendMessageAsync(serviceBusMessage, cts.Token);
+            return Unit.Value;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Error publishing message: {Message}", message);
+            return new Failure(e, "Error publishing message: {MessageType}", message);
         }
     }
 
-    public async Task SubscribeAsync<TMessage, TMessageHandler>(CancellationToken cancellationToken = default)
+    public async Task<Result<Unit>> SubscribeAsync<TMessage, TMessageHandler>(
+        CancellationToken cancellationToken = default)
         where TMessage : Message where TMessageHandler : IMessageHandler<TMessage>
     {
         if (options.Subscriptions == null || options.Subscriptions.Length == 0)
         {
-            return;
+            return Unit.Value;
         }
 
         RegisterMessageHandler<TMessage, TMessageHandler>();
-        using var cts =
-            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        var processors = new List<(ServiceBusProcessor Processor, CancellationTokenSource Cts)>();
-        foreach (var subscription in options.Subscriptions)
-        {
-            var processor = _serviceBusClient.CreateProcessor(options.Route, subscription);
-            processor.ProcessMessageAsync += ProcessMessageAsync;
-            processor.ProcessErrorAsync += ProcessErrorAsync;
-            processors.Add((processor, cts));
-        }
-
         try
         {
+            using var cts =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
+            var processors = new List<(ServiceBusProcessor Processor, CancellationTokenSource Cts)>();
+            foreach (var subscription in options.Subscriptions)
+            {
+                var processor = _serviceBusClient.CreateProcessor(options.Service, subscription);
+                processor.ProcessMessageAsync += ProcessMessageAsync;
+                processor.ProcessErrorAsync += ProcessErrorAsync;
+                processors.Add((processor, cts));
+            }
+
             await Task.WhenAll(processors.Select(x => x.Processor.StartProcessingAsync(x.Cts.Token)));
-            _processors = processors.ToDictionary(x => x.Processor.Identifier, x => x.Processor);
+            _processors.AddRange(processors.Select(x => x.Processor));
+            return Unit.Value;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Error starting message processors: {MessageHandler}", typeof(TMessageHandler).Name);
+            return new Failure(e, "Error starting message processors: {MessageType}", typeof(TMessageHandler).Name);
         }
     }
 
@@ -101,56 +98,44 @@ public sealed class AzureServiceBus(
 
     private async Task ProcessMessageAsync(ProcessMessageEventArgs e)
     {
-        if (_cancellationTokenSource.IsCancellationRequested || e.CancellationToken.IsCancellationRequested)
-            return;
-
         var message = Encoding.UTF8.GetString(e.Message.Body.ToArray());
         var messageType = e.Message.ApplicationProperties["MessageType"].ToString();
 
-        try
+        if (messageType == null || !_handlers.ContainsKey(messageType))
         {
-            if (messageType == null || !_handlers.ContainsKey(messageType))
-            {
-                return;
-            }
+            return;
+        }
 
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(e.CancellationToken,
-                _cancellationTokenSource.Token);
-            _cancellationTokenSources.Add(cts);
-            await ProcessEvent(messageType, message, cts.Token);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Message handler error occured while processing message: {MessageType}", messageType);
-        }
-        finally
-        {
-            await e.CompleteMessageAsync(e.Message);
-        }
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(e.CancellationToken,
+            _cancellationTokenSource.Token);
+        var result = await ProcessEvent(messageType, message, cts.Token);
+
+        if (result.IsOk)
+            await e.CompleteMessageAsync(e.Message, cts.Token);
+        else
+            await e.AbandonMessageAsync(e.Message, cancellationToken: cts.Token);
     }
 
-    private Task ProcessErrorAsync(ProcessErrorEventArgs e)
+    private static Task ProcessErrorAsync(ProcessErrorEventArgs e)
     {
-        logger.LogError(e.Exception, "Error processing message");
         return Task.CompletedTask;
     }
 
-    private async Task ProcessEvent(string messageTypeName, string messageStr,
+    private async Task<Result<Unit>> ProcessEvent(string messageTypeName, string messageStr,
         CancellationToken cancellationToken = default)
     {
-        if (_handlers.TryGetValue(messageTypeName, out var subscriptions))
+        if (!_handlers.TryGetValue(messageTypeName, out var subscriptions))
+            return Unit.Value;
+
+        try
         {
             using var scope = serviceScopeFactory.CreateScope();
             var tasks = new List<Task>();
             foreach (var handler in
-                     subscriptions.Select(subscription => scope.ServiceProvider.GetService(subscription)))
+                     subscriptions
+                         .Select(subscription => scope.ServiceProvider.GetService(subscription))
+                         .Where(x => x != null))
             {
-                if (handler is null)
-                {
-                    logger.LogWarning("Handler not found for message type: {MessageType}", messageTypeName);
-                    continue;
-                }
-
                 var messageType = _eventTypes.SingleOrDefault(t => t.Name == messageTypeName);
                 var message = JsonSerializer.Deserialize(messageStr, messageType!);
                 var concreteType = typeof(IMessageHandler<>).MakeGenericType(messageType!);
@@ -159,31 +144,27 @@ public sealed class AzureServiceBus(
             }
 
             await Task.WhenAll(tasks);
+            return Unit.Value;
+        }
+        catch (Exception e)
+        {
+            return new Failure(e, "Error processing message: {MessageType}", messageStr);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
+        await Task.WhenAll(_processors.Select(async processor =>
+        {
+            processor.ProcessMessageAsync -= ProcessMessageAsync;
+            processor.ProcessErrorAsync -= ProcessErrorAsync;
+            await processor.StopProcessingAsync();
+            await processor.DisposeAsync();
+        }).ToArray());
+
+        _processors.Clear();
         await _cancellationTokenSource.CancelAsync();
         _cancellationTokenSource.Dispose();
-        foreach (var cancellationTokenSource in _cancellationTokenSources)
-        {
-            cancellationTokenSource.Dispose();
-        }
-
-        if (_processors != null)
-        {
-            foreach (var processor in _processors.Values)
-            {
-                processor.ProcessMessageAsync -= ProcessMessageAsync;
-                processor.ProcessErrorAsync -= ProcessErrorAsync;
-                await processor.StopProcessingAsync();
-                await processor.DisposeAsync();
-            }
-
-            _processors.Clear();
-        }
-
         await _serviceBusClient.DisposeAsync();
     }
 }
