@@ -28,6 +28,9 @@ public readonly struct Result<TOk>
     [MemberNotNullWhen(false, "Value")]
     public bool IsError { get; }
 
-    public static implicit operator Result<TOk>(TOk value) => new(value);
-    public static implicit operator Result<TOk>(Error error) => new(error);
+    public static implicit operator Result<TOk>(TOk value) => FromValue(value);
+    public static implicit operator Result<TOk>(Error error) => FromError(error);
+
+    public static Result<TOk> FromValue(TOk value) => new(value);
+    public static Result<TOk> FromError(Error error) => new(error);
 }

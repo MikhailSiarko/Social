@@ -1,5 +1,5 @@
-﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+using MongoDB.Driver;
 using Social.Services.User.Domain.Persistence;
 using Social.Shared;
 using Social.Shared.Errors;
@@ -8,41 +8,38 @@ using PersistenceUser = Social.Services.User.Persistence.Models.User;
 
 namespace Social.Services.User.Persistence;
 
-public sealed class UserRepository(IConfiguration configuration) : RepositoryBase(configuration), IUserRepository
+public sealed class UserRepository(IConfiguration configuration)
+    : RepositoryBase<PersistenceUser>(configuration), IUserRepository
 {
     private readonly IConfiguration _configuration = configuration;
 
-    protected override string ContainerName => _configuration["Containers:Users:Name"]!;
+    protected override string CollectionName => _configuration["Collections:Users"]!;
     protected override string DatabaseName => _configuration["Database"]!;
-    private string PartitionKeyPath => _configuration["Containers:Users:PartitionKeyPath"]!;
 
-    protected override async Task<Container?> SetupAsync(Database database,
+    protected override Task SetupAsync(IMongoCollection<PersistenceUser> collection,
         CancellationToken cancellationToken = default)
     {
-        return await database.CreateContainerIfNotExistsAsync(new ContainerProperties
-        {
-            Id = ContainerName,
-            PartitionKeyPath = PartitionKeyPath,
-            UniqueKeyPolicy = new UniqueKeyPolicy { UniqueKeys = { new UniqueKey { Paths = { "/email" } } } }
-        }, cancellationToken: cancellationToken);
+        var uniqueIndex = new CreateIndexModel<PersistenceUser>(
+            Builders<PersistenceUser>.IndexKeys.Ascending(u => u.Email),
+            new CreateIndexOptions { Unique = true, Name = "Users_Email_Unique" });
+        return collection.Indexes.CreateOneAsync(uniqueIndex, cancellationToken: cancellationToken);
     }
 
     public async Task<Result<DomainUser>> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         try
         {
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var userIdString = id.ToString();
-            var userResponse = await container.ReadItemAsync<PersistenceUser>(userIdString,
-                new PartitionKey(userIdString), cancellationToken: cancellationToken);
-            if (userResponse is null)
-                return new Error("Read result is null. User ID = '{UserId}'", userIdString);
+            var collection = collectionResult.Value;
+            var userCursor = await collection.FindAsync(x => x.Id == id,
+                new FindOptions<PersistenceUser> { Limit = 1 }, cancellationToken: cancellationToken);
+            if (userCursor is null)
+                return new Error("Read result is null. User ID = '{UserId}'", id);
 
-            var user = userResponse.Resource;
+            var user = await userCursor.SingleOrDefaultAsync(cancellationToken);
             if (user is null)
                 return new NotFound("User with ID '{0}' not found.", id);
 
@@ -59,27 +56,21 @@ public sealed class UserRepository(IConfiguration configuration) : RepositoryBas
         try
         {
             ArgumentNullException.ThrowIfNull(email);
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var queryDefinition = new QueryDefinition("SELECT TOP 1 * FROM c WHERE c.email = @email")
-                .WithParameter("@email", email);
+            var collection = collectionResult.Value;
+            var userCursor = await collection.FindAsync(x => x.Email == email,
+                new FindOptions<PersistenceUser> { Limit = 1 }, cancellationToken: cancellationToken);
+            if (userCursor is null)
+                return new Error("Read result is null. User Email = '{Email}'", email);
 
-            using var iterator = container.GetItemQueryIterator<PersistenceUser>(queryDefinition);
-            var result = new List<PersistenceUser>();
-            while (iterator.HasMoreResults)
-            {
-                var response = await iterator.ReadNextAsync(cancellationToken);
-                result.AddRange(response);
-            }
-
-            var user = result.Select(Converter.Convert).SingleOrDefault();
+            var user = await userCursor.SingleOrDefaultAsync(cancellationToken);
             if (user is null)
-                return new NotFound("User with email '{Email}' not found.", email);
+                return new NotFound("User with Email '{Email}' not found.", email);
 
-            return user;
+            return Converter.Convert(user);
         }
         catch (Exception e)
         {
@@ -92,15 +83,14 @@ public sealed class UserRepository(IConfiguration configuration) : RepositoryBas
         try
         {
             ArgumentNullException.ThrowIfNull(user);
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
+            var collection = collectionResult.Value;
             var persistenceUser = Converter.Convert(user);
             persistenceUser.CreatedAt = DateTime.UtcNow;
-            await container.CreateItemAsync(persistenceUser, new PartitionKey(user.Id.ToString()),
-                cancellationToken: cancellationToken);
+            await collection.InsertOneAsync(persistenceUser, cancellationToken: cancellationToken);
             return Unit.Value;
         }
         catch (Exception e)
@@ -113,19 +103,13 @@ public sealed class UserRepository(IConfiguration configuration) : RepositoryBas
     {
         try
         {
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var userIdString = userId.ToString();
-            var userResponse = await container.ReadItemAsync<PersistenceUser>(userIdString,
-                new PartitionKey(userIdString), cancellationToken: cancellationToken);
-            if (userResponse is null)
-                return new Error("Read result is null. User ID = '{UserId}'", userIdString);
-
-            var user = userResponse.Resource;
-            if (user is null)
+            var collection = collectionResult.Value;
+            var count = await collection.CountDocumentsAsync(x => x.Id == userId, cancellationToken: cancellationToken);
+            if (count == 0)
                 return new NotFound("User with ID '{0}' not found.", userId);
 
             return Unit.Value;
@@ -142,18 +126,17 @@ public sealed class UserRepository(IConfiguration configuration) : RepositoryBas
         try
         {
             var count = unfollow ? -1 : 1;
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var userIdString = userId.ToString();
-            var followsToUserIdString = followsToUserId.ToString();
+            var collection = collectionResult.Value;
             await Task.WhenAll(
-                container.PatchItemAsync<PersistenceUser>(userIdString, new PartitionKey(userIdString),
-                    [PatchOperation.Increment("/followings", count)], cancellationToken: cancellationToken),
-                container.PatchItemAsync<PersistenceUser>(followsToUserIdString,
-                    new PartitionKey(followsToUserIdString), [PatchOperation.Increment("/followers", count)],
+                collection.UpdateOneAsync(x => x.Id == userId,
+                    Builders<PersistenceUser>.Update.Inc(x => x.Followings, count),
+                    cancellationToken: cancellationToken),
+                collection.UpdateOneAsync(x => x.Id == followsToUserId,
+                    Builders<PersistenceUser>.Update.Inc(x => x.Followers, count),
                     cancellationToken: cancellationToken));
 
             return Unit.Value;

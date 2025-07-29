@@ -1,5 +1,5 @@
-﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+using MongoDB.Driver;
 using Social.Services.User.Domain.Persistence;
 using Social.Services.User.Persistence.Models;
 using Social.Shared;
@@ -8,24 +8,22 @@ using Social.Shared.Errors;
 namespace Social.Services.User.Persistence;
 
 public sealed class UserFollowRepository(IConfiguration configuration)
-    : RepositoryBase(configuration), IUserFollowRepository
+    : RepositoryBase<UserFollow>(configuration), IUserFollowRepository
 {
     private readonly IConfiguration _configuration = configuration;
 
-    protected override string ContainerName => _configuration["Containers:UserFollows:Name"]!;
+    protected override string CollectionName => _configuration["Collections:UserFollows"]!;
     protected override string DatabaseName => _configuration["Database"]!;
-    private string PartitionKeyPath => _configuration["Containers:UserFollows:PartitionKeyPath"]!;
 
-    protected override async Task<Container?> SetupAsync(Database database,
+    protected override Task SetupAsync(IMongoCollection<UserFollow> collection,
         CancellationToken cancellationToken = default)
     {
-        return await database.CreateContainerIfNotExistsAsync(new ContainerProperties
-        {
-            Id = ContainerName,
-            PartitionKeyPath = PartitionKeyPath,
-            UniqueKeyPolicy = new UniqueKeyPolicy
-                { UniqueKeys = { new UniqueKey { Paths = { "/userId", "/followsToUserId" } } } }
-        }, cancellationToken: cancellationToken);
+        var uniqueIndex = new CreateIndexModel<UserFollow>(
+            Builders<UserFollow>.IndexKeys.Combine(
+                Builders<UserFollow>.IndexKeys.Ascending(u => u.UserId),
+                Builders<UserFollow>.IndexKeys.Ascending(u => u.FollowsToUserId)),
+            new CreateIndexOptions { Unique = true, Name = "UserFollows_Unique" });
+        return collection.Indexes.CreateOneAsync(uniqueIndex, cancellationToken: cancellationToken);
     }
 
     public async Task<Result<Unit>> AddAsync(Guid userId, Guid followedByUserId,
@@ -33,16 +31,14 @@ public sealed class UserFollowRepository(IConfiguration configuration)
     {
         try
         {
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var userFollow = new UserFollow { UserId = userId, FollowsToUserId = followedByUserId, StartedFollowAt = DateTime.UtcNow };
-            await container.CreateItemAsync(
-                userFollow,
-                new PartitionKey(userFollow.Id),
-                cancellationToken: cancellationToken);
+            var collection = collectionResult.Value;
+            var userFollow = new UserFollow
+                { UserId = userId, FollowsToUserId = followedByUserId, StartedFollowAt = DateTime.UtcNow };
+            await collection.InsertOneAsync(userFollow, cancellationToken: cancellationToken);
             return Unit.Value;
         }
         catch (Exception e)
@@ -57,14 +53,13 @@ public sealed class UserFollowRepository(IConfiguration configuration)
     {
         try
         {
-            var containerResult = await GetContainerAsync(cancellationToken);
-            if (containerResult.IsError)
-                return containerResult.Error;
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
 
-            var container = containerResult.Value;
-            var userFollow = new UserFollow { UserId = userId, FollowsToUserId = followedByUserId };
-            await container.DeleteItemAsync<UserFollow>(userFollow.Id, new PartitionKey(userFollow.Id),
-                cancellationToken: cancellationToken);
+            var collection = collectionResult.Value;
+            await collection.DeleteOneAsync(
+                x => x.UserId == userId && x.FollowsToUserId == followedByUserId, cancellationToken: cancellationToken);
             return Unit.Value;
         }
         catch (Exception e)
