@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,21 +21,13 @@ public sealed class KafkaServiceBus(
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Dictionary<string, List<Type>> _handlers = new();
     private readonly HashSet<Type> _eventTypes = [];
+    private bool _isTopicCreated;
 
     private readonly ProducerConfig _producerConfig = new()
     {
         ClientId = environment.ApplicationName,
         AllowAutoCreateTopics = true,
         BootstrapServers = configuration.GetConnectionString("Messaging")
-    };
-
-    private readonly ConsumerConfig _consumerConfig = new()
-    {
-        GroupId = environment.ApplicationName,
-        AllowAutoCreateTopics = true,
-        ClientId = environment.ApplicationName,
-        BootstrapServers = configuration.GetConnectionString("Messaging"),
-        AutoOffsetReset = AutoOffsetReset.Earliest
     };
 
     public async Task<Result<Unit>> PublishAsync(Message message, CancellationToken cancellationToken = default)
@@ -56,7 +49,7 @@ public sealed class KafkaServiceBus(
         }
         catch (Exception e)
         {
-            return new Failure(e, "Error while publishing message: {MessageType}", message.GetType().Name);;
+            return new Failure(e, "Error while publishing message: {MessageType}", message.GetType().Name);
         }
     }
 
@@ -64,17 +57,32 @@ public sealed class KafkaServiceBus(
         CancellationToken cancellationToken = default)
         where TMessage : Message where TMessageHandler : IMessageHandler<TMessage>
     {
+        if (!_isTopicCreated)
+            await InitializeAsync();
+
         RegisterMessageHandler<TMessage, TMessageHandler>();
         try
         {
             using var cts =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-            using var consumer = new ConsumerBuilder<string, string>(_consumerConfig).Build();
+
+            ConsumerConfig consumerConfig = new()
+            {
+                GroupId = environment.ApplicationName,
+                ClientId = $"{environment.ApplicationName}-{typeof(TMessageHandler).Name}",
+                BootstrapServers = configuration.GetConnectionString("Messaging"),
+                AutoOffsetReset = AutoOffsetReset.Earliest
+            };
+
+            using var consumer = new ConsumerBuilder<string, string>(consumerConfig).Build();
             consumer.Subscribe(options.Topic);
 
             while (!cts.IsCancellationRequested)
             {
                 var result = consumer.Consume(cts.Token);
+                if (result?.Message?.Value is null)
+                    continue;
+
                 var processResult = await ProcessMessageAsync(result.Message, cts.Token);
                 if (processResult.IsError)
                 {
@@ -104,7 +112,7 @@ public sealed class KafkaServiceBus(
         }
         else
         {
-            handlers = [];
+            handlers = [typeof(TMessageHandler)];
             _handlers.Add(messageTypeName, handlers);
         }
     }
@@ -115,6 +123,20 @@ public sealed class KafkaServiceBus(
         return _handlers.ContainsKey(message.Key)
             ? ProcessEventAsync(message.Key, message.Value, token)
             : Task.FromResult<Result<Unit>>(Unit.Value);
+    }
+
+    private async Task InitializeAsync()
+    {
+        using var admin = new AdminClientBuilder(new AdminClientConfig
+            { BootstrapServers = configuration.GetConnectionString("Messaging") }).Build();
+        await admin.CreateTopicsAsync([
+            new TopicSpecification
+            {
+                Name = options.Topic
+            }
+        ]);
+
+        _isTopicCreated = true;
     }
 
     private async Task<Result<Unit>> ProcessEventAsync(string messageTypeName, string messageStr,
