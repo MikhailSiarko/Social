@@ -33,7 +33,10 @@ public sealed class ApplicationService(
         }
 
         var registeredUser = registeredUserResult.Value;
-        await serviceBus.PublishAsync(new UserCreated(registeredUser.Id, registeredUser.Email), cancellationToken);
+        var publishResult = await serviceBus.PublishAsync(new UserCreated(registeredUser.Id, registeredUser.Email),
+            cancellationToken);
+        if (!publishResult.IsOk)
+            logger.LogError(publishResult.Error);
 
         var token = authService.Authenticate(registeredUser);
         var userModel = new UserModel(
