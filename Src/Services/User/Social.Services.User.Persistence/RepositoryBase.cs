@@ -1,56 +1,55 @@
-﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using Social.Shared;
 using Social.Shared.Errors;
 
 namespace Social.Services.User.Persistence;
 
-public abstract class RepositoryBase(IConfiguration configuration) : IDisposable
+public abstract class RepositoryBase<TDocument>(IConfiguration configuration) : IDisposable
 {
-    private readonly CosmosClient _cosmosClient = new(configuration.GetConnectionString("UserStorage")!,
-        new CosmosClientOptions
-        {
-            SerializerOptions = new CosmosSerializationOptions
-            {
-                IgnoreNullValues = true,
-                PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
-            },
-            CosmosClientTelemetryOptions = new CosmosClientTelemetryOptions
-            {
-                QueryTextMode = QueryTextMode.All
-            }
-        });
+    private readonly MongoClient _mongoClient = new(configuration.GetConnectionString("UserStorage")!);
 
-    protected abstract string ContainerName { get; }
+    protected abstract string CollectionName { get; }
     protected abstract string DatabaseName { get; }
 
-    private Container? _container;
+    private IMongoCollection<TDocument>? _collection;
 
-    protected async Task<Result<Container>> GetContainerAsync(CancellationToken cancellationToken = default)
+    protected async Task<Result<IMongoCollection<TDocument>>> GetCollectionAsync(
+        CancellationToken cancellationToken = default)
     {
-        if (_container != null)
-            return _container;
+        if (_collection != null)
+            return Result<IMongoCollection<TDocument>>.FromValue(_collection);
 
-        var database =
-            await _cosmosClient.CreateDatabaseIfNotExistsAsync(DatabaseName, cancellationToken: cancellationToken);
+        var database = _mongoClient.GetDatabase(DatabaseName);
         if (database == null)
             return new Error("Error while creating database: {DatabaseName}", DatabaseName);
 
-        _container = await SetupAsync(database, cancellationToken);
-        if (_container == null)
-            return new Error("Error while creating container: {ContainerName}", ContainerName);
+        var collectionsCursor = await database.ListCollectionNamesAsync(
+            new ListCollectionNamesOptions
+                { Filter = Builders<BsonDocument>.Filter.Eq(x => x.AsString, CollectionName) },
+            cancellationToken: cancellationToken);
 
-        return _container;
+        if (await collectionsCursor.AnyAsync(cancellationToken: cancellationToken))
+        {
+            _collection = database.GetCollection<TDocument>(CollectionName);
+            return Result<IMongoCollection<TDocument>>.FromValue(_collection);
+        }
+
+        _collection = database.GetCollection<TDocument>(CollectionName);
+        await SetupAsync(_collection, cancellationToken);
+        return Result<IMongoCollection<TDocument>>.FromValue(_collection);
     }
 
-    protected abstract Task<Container?> SetupAsync(Database database, CancellationToken cancellationToken = default);
+    protected abstract Task SetupAsync(IMongoCollection<TDocument> collection,
+        CancellationToken cancellationToken = default);
 
     private void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _cosmosClient.Dispose();
-        }
+        if (!disposing)
+            return;
+
+        _mongoClient.Dispose();
     }
 
     public void Dispose()

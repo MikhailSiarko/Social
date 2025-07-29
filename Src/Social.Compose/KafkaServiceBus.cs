@@ -6,7 +6,8 @@ public static class KafkaServiceBus
     {
         var serviceBus = builder
             .AddKafka("kafka-server")
-            .WithContainerName("kafka.server");
+            .WithContainerName("kafka.server")
+            .WithOtlpExporter();
 
         serviceBus.WithKafkaUI(x =>
         {
