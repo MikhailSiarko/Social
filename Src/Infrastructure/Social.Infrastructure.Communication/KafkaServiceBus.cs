@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Configuration;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Social.Infrastructure.Communication.Abstractions;
 using Social.Shared;
 using Social.Shared.Errors;
+using Error = Social.Shared.Errors.Error;
 
 namespace Social.Infrastructure.Communication;
 
@@ -26,7 +28,6 @@ public sealed class KafkaServiceBus(
     private readonly ProducerConfig _producerConfig = new()
     {
         ClientId = environment.ApplicationName,
-        AllowAutoCreateTopics = true,
         BootstrapServers = configuration.GetConnectionString("Messaging")
     };
 
@@ -34,6 +35,9 @@ public sealed class KafkaServiceBus(
     {
         try
         {
+            if (!_isTopicCreated)
+                await InitializeAsync();
+
             using var cts =
                 CancellationTokenSource.CreateLinkedTokenSource(_cancellationTokenSource.Token, cancellationToken);
             using var producer =
@@ -41,8 +45,9 @@ public sealed class KafkaServiceBus(
             var messageType = message.GetType();
             await producer.ProduceAsync(options.Topic, new Message<string, string>
             {
-                Key = messageType.Name,
-                Value = JsonSerializer.Serialize(message, messageType)
+                Key = message.CorrelationId.ToString(),
+                Value = JsonSerializer.Serialize(message, messageType),
+                Headers = [new Header("MessageType", Encoding.UTF8.GetBytes(messageType.Name))]
             }, cts.Token);
             logger.LogTrace("Message published: {MessageType}", messageType.Name);
             return Unit.Value;
@@ -120,23 +125,39 @@ public sealed class KafkaServiceBus(
     private Task<Result<Unit>> ProcessMessageAsync(Message<string, string> message,
         CancellationToken token = default)
     {
-        return _handlers.ContainsKey(message.Key)
-            ? ProcessEventAsync(message.Key, message.Value, token)
+        var messageTypeHeader = message.Headers.SingleOrDefault(h => h.Key == "MessageType");
+        if (messageTypeHeader is null)
+            return Task.FromResult<Result<Unit>>(
+                new Error("Message header 'MessageType' not found. Message: {MessageKey}", message.Key));
+
+        var messageType = Encoding.UTF8.GetString(messageTypeHeader.GetValueBytes());
+        return _handlers.ContainsKey(messageType)
+            ? ProcessEventAsync(messageType, message.Value, token)
             : Task.FromResult<Result<Unit>>(Unit.Value);
     }
 
     private async Task InitializeAsync()
     {
-        using var admin = new AdminClientBuilder(new AdminClientConfig
-            { BootstrapServers = configuration.GetConnectionString("Messaging") }).Build();
-        await admin.CreateTopicsAsync([
-            new TopicSpecification
-            {
-                Name = options.Topic
-            }
-        ]);
-
-        _isTopicCreated = true;
+        try
+        {
+            using var admin = new AdminClientBuilder(new AdminClientConfig
+                { BootstrapServers = configuration.GetConnectionString("Messaging") }).Build();
+            await admin.CreateTopicsAsync([
+                new TopicSpecification
+                {
+                    Name = options.Topic,
+                    NumPartitions = Convert.ToInt32(configuration["Kafka:Partitions"])
+                }
+            ]);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Error while creating topic: {Topic}", options.Topic);
+        }
+        finally
+        {
+            _isTopicCreated = true;
+        }
     }
 
     private async Task<Result<Unit>> ProcessEventAsync(string messageTypeName, string messageStr,

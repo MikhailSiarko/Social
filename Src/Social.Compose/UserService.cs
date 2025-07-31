@@ -9,6 +9,7 @@ public static class UserService
         var dbConfig = builder.Configuration.GetSection("UserService:Db");
         var authConfig = builder.Configuration.GetSection("UserService:Auth");
         var serviceBusConfig = builder.Configuration.GetSection("UserService:ServiceBus");
+        var kafkaConfig = builder.Configuration.GetSection("UserService:Kafka");
 
         var userServiceDb = mongoDb
             .AddDatabase("database", dbConfig["Database"]!);
@@ -24,6 +25,7 @@ public static class UserService
             .WithEnvironment("Auth:Key", authConfig["Key"])
             .WithEnvironment("ServiceBus:0:Topic", serviceBusConfig["Topic"])
             .WithEnvironment("ServiceBus:0:Key", serviceBusConfig["Key"])
+            .WithEnvironment("Kafka:Partitions", kafkaConfig["Partitions"])
             .WithReference(mongoDb, "UserStorage")
             .WithReference(messaging, "Messaging")
             .WaitFor(messaging)
