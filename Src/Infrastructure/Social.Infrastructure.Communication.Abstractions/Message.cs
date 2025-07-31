@@ -2,6 +2,6 @@
 
 public abstract class Message
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public abstract Guid CorrelationId { get; protected set; }
     public DateTime Timestamp { get; } = DateTime.UtcNow;
 }
