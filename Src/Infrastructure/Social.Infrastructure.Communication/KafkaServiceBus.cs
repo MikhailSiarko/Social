@@ -172,7 +172,7 @@ public sealed class KafkaServiceBus(
             var tasks = new List<Task<Result<Unit>>>();
             foreach (var handler in
                      subscriptions
-                         .Select(subscription => scope.ServiceProvider.GetService(subscription))
+                         .Select(scope.ServiceProvider.GetService)
                          .Where(x => x != null))
             {
                 var messageType = _eventTypes.SingleOrDefault(t => t.Name == messageTypeName);

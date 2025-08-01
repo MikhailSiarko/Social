@@ -105,16 +105,14 @@ public sealed class ApplicationService(
 
     public async Task<Result<Unit>> UnfollowUserAsync(Guid unfollowToUserId, CancellationToken token = default)
     {
-        var userIdClaim =
-            httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
-        if (userIdClaim is null)
+        var userIdResult = GetUserId();
+        if (userIdResult.IsError)
         {
-            var error = new Error("Cannot get user ID from http context");
-            logger.LogError(error);
-            return error;
+            logger.LogError(userIdResult.Error);
+            return userIdResult.Error;
         }
 
-        var userId = Guid.Parse(userIdClaim.Value);
+        var userId = userIdResult.Value;
         var result = await mediator.Send(new DeleteUserFollowCommand(userId, unfollowToUserId), token);
         if (!result.IsError)
         {
@@ -124,5 +122,41 @@ public sealed class ApplicationService(
 
         logger.LogError(result.Error);
         return result.Error;
+    }
+
+    public async Task<Result<Unit>> UpdateUserAsync(PatchUserModel model, CancellationToken token = default)
+    {
+        var userIdResult = GetUserId();
+        if (userIdResult.IsError)
+        {
+            logger.LogError(userIdResult.Error);
+            return userIdResult.Error;
+        }
+
+        var userId = userIdResult.Value;
+        var result = await mediator.Send(new UpdateUserCommand(userId, model.UserName, model.FirstName, model.LastName),
+            token);
+
+        if (!result.IsError)
+        {
+            await serviceBus.PublishAsync(new UserUpdated(userId, model.UserName, model.FirstName, model.LastName),
+                token);
+            return Unit.Value;
+        }
+
+        logger.LogError(result.Error);
+        return result.Error;
+    }
+
+    private Result<Guid> GetUserId()
+    {
+        var userIdClaim =
+            httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
+        if (userIdClaim is not null)
+            return Guid.Parse(userIdClaim.Value);
+
+        var error = new Error("Cannot get user ID from http context");
+        logger.LogError(error);
+        return error;
     }
 }

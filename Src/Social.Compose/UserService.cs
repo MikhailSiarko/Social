@@ -26,7 +26,7 @@ public static class UserService
             .WithEnvironment("ServiceBus:0:Topic", serviceBusConfig["Topic"])
             .WithEnvironment("ServiceBus:0:Key", serviceBusConfig["Key"])
             .WithEnvironment("Kafka:Partitions", kafkaConfig["Partitions"])
-            .WithReference(mongoDb, "UserStorage")
+            .WithReference(userServiceDb, "UserStorage")
             .WithReference(messaging, "Messaging")
             .WaitFor(messaging)
             .WaitFor(userServiceDb);

@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.7"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\Infrastructure\Social.Infrastructure.Communication.Abstractions\Social.Infrastructure.Communication.Abstractions.csproj" />
+      <ProjectReference Include="..\..\..\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" />
+      <ProjectReference Include="..\..\..\Social.Shared\Social.Shared.csproj" />
+      <ProjectReference Include="..\..\Social.Services.Monitoring\Social.Services.Monitoring.csproj" />
+      <ProjectReference Include="..\..\Social.Services.Shared\Social.Services.Shared.csproj" />
+      <ProjectReference Include="..\Social.Services.Search.Application\Social.Services.Search.Application.csproj" />
+      <ProjectReference Include="..\Social.Services.Search.Persistence\Social.Services.Search.Persistence.csproj" />
+    </ItemGroup>
+
+</Project>

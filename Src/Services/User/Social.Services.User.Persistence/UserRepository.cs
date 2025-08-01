@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using Social.Services.User.Domain.Models;
 using Social.Services.User.Domain.Persistence;
 using Social.Shared;
 using Social.Shared.Errors;
@@ -78,7 +79,7 @@ public sealed class UserRepository(IConfiguration configuration)
         }
     }
 
-    public async Task<Result<Unit>> AddAsync(DomainUser? user, CancellationToken cancellationToken = default)
+    public async Task<Result<Unit>> AddAsync(DomainUser user, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -95,7 +96,48 @@ public sealed class UserRepository(IConfiguration configuration)
         }
         catch (Exception e)
         {
-            return new Failure(e, "Error while adding user with email '{Email}'", user!.Email);
+            return new Failure(e, "Error while adding user with email '{Email}'", user.Email);
+        }
+    }
+
+    public async Task<Result<Unit>> UpdateAsync(UpdateUser updateUser, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var collectionResult = await GetCollectionAsync(cancellationToken);
+            if (collectionResult.IsError)
+                return collectionResult.Error;
+
+            var collection = collectionResult.Value;
+            var updateTasks = new List<Task>();
+
+            if (updateUser.UserName != null)
+            {
+                updateTasks.Add(collection.UpdateOneAsync(x => x.Id == updateUser.Id,
+                    Builders<PersistenceUser>.Update.Set(x => x.UserName, updateUser.UserName),
+                    cancellationToken: cancellationToken));
+            }
+
+            if (updateUser.FirstName != null)
+            {
+                updateTasks.Add(collection.UpdateOneAsync(x => x.Id == updateUser.Id,
+                    Builders<PersistenceUser>.Update.Set(x => x.FirstName, updateUser.FirstName),
+                    cancellationToken: cancellationToken));
+            }
+            
+            if (updateUser.LastName != null)
+            {
+                updateTasks.Add(collection.UpdateOneAsync(x => x.Id == updateUser.Id,
+                    Builders<PersistenceUser>.Update.Set(x => x.LastName, updateUser.LastName),
+                    cancellationToken: cancellationToken));
+            }
+
+            await Task.WhenAll(updateTasks);
+            return Unit.Value;
+        }
+        catch (Exception e)
+        {
+            return new Failure(e, "Error while updating user with ID '{UserId}'", updateUser.Id);
         }
     }
 
