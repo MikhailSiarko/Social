@@ -9,4 +9,5 @@ public interface IApplicationService
     Task<Result<AuthUserModel>> LoginUserAsync(string email, string password, CancellationToken token = default);
     Task<Result<Unit>> FollowUserAsync(Guid followToUserId, CancellationToken token = default);
     Task<Result<Unit>> UnfollowUserAsync(Guid unfollowToUserId, CancellationToken token = default);
+    Task<Result<Unit>> UpdateUserAsync(PatchUserModel model, CancellationToken token = default);
 }

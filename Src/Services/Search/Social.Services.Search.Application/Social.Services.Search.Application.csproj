@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\Infrastructure\Social.Infrastructure.Communication.Abstractions\Social.Infrastructure.Communication.Abstractions.csproj" />
+      <ProjectReference Include="..\..\..\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" />
+      <ProjectReference Include="..\..\..\Social.Shared\Social.Shared.csproj" />
+      <ProjectReference Include="..\..\Social.Services.Shared\Social.Services.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.7" />
+    </ItemGroup>
+
+</Project>

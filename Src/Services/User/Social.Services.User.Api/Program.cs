@@ -24,5 +24,6 @@ app.UseAuthorization();
 app.MapRegister();
 app.MapLogin();
 app.MapFollow();
+app.MapUser();
 
 app.Run();

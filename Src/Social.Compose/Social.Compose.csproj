@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <Sdk Name="Aspire.AppHost.Sdk" Version="9.3.1"/>
+    <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.0" />
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -11,12 +11,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting.AppHost" Version="9.3.1"/>
-        <PackageReference Include="Aspire.Hosting.Kafka" Version="9.3.1" />
-        <PackageReference Include="Aspire.Hosting.MongoDB" Version="9.3.1" />
+        <PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.0" />
+        <PackageReference Include="Aspire.Hosting.Kafka" Version="9.4.0" />
+        <PackageReference Include="Aspire.Hosting.MongoDB" Version="9.4.0" />
+        <PackageReference Include="Elastic.Aspire.Hosting.Elasticsearch" Version="9.3.0" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Services\Search\Social.Services.Search.Api\Social.Services.Search.Api.csproj" AspireProjectMetadataTypeName="SearchService" />
       <ProjectReference Include="..\Services\User\Social.Services.User.Api\Social.Services.User.Api.csproj" AspireProjectMetadataTypeName="UserService" />
       <ProjectReference Include="..\Social.Shared\Social.Shared.csproj" IsAspireProjectResource="false" />
     </ItemGroup>
