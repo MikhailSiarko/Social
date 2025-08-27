@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Social.Services.User.Application;
-using Social.Services.User.Application.Models;
 
 namespace Social.Services.User.Api.Routes;
 
@@ -9,24 +8,24 @@ public static class UserFollow
 {
     public static WebApplication MapFollow(this WebApplication app)
     {
-        app.MapPost("/follow",
-                [Authorize] static async ([FromBody] UserFollowModel model,
+        app.MapPost("/{userId:guid}/follow/{targetUserId:guid}",
+                [AllowAnonymous] static async ([FromRoute] Guid userId, [FromRoute] Guid targetUserId,
                     [FromServices] IApplicationService appService,
                     CancellationToken token) =>
                 {
-                    var authResult = await appService.FollowUserAsync(model.UserId, token);
+                    var authResult = await appService.FollowUserAsync(userId, targetUserId, token);
                     return authResult.ToHttpResult();
                 }
             )
             .WithName("Follow");
 
-        app.MapPost("/unfollow",
-                [Authorize] static async ([FromBody] UserFollowModel model,
+        app.MapPost("/{userId:guid}/unfollow/{targetUserId:guid}",
+                [AllowAnonymous] static async ([FromRoute] Guid userId, [FromRoute] Guid targetUserId,
                     [FromServices] IApplicationService appService,
                     CancellationToken token) =>
                 {
-                    var authResult = await appService.UnfollowUserAsync(model.UserId, token);
-                    return authResult.ToHttpResult();
+                    var unfollowResult = await appService.UnfollowUserAsync(userId, targetUserId, token);
+                    return unfollowResult.ToHttpResult();
                 }
             )
             .WithName("Unfollow");

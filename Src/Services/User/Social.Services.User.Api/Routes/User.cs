@@ -9,12 +9,30 @@ public static class User
 {
     public static WebApplication MapUser(this WebApplication app)
     {
-        app.MapPatch("/",
-                [Authorize] static async ([FromBody] PatchUserModel model,
+        app.MapPost("/",
+                [AllowAnonymous] static async ([FromBody] CreateUserModel model,
                     [FromServices] IApplicationService appService,
                     CancellationToken token) =>
                 {
-                    var authResult = await appService.UpdateUserAsync(model, token);
+                    var userResult = await appService.CreateUserAsync(model.Email, token);
+                    return userResult.ToHttpResult();
+                }
+            )
+            .WithName("Create");
+
+        app.MapGet("/{id:guid}",
+            async (Guid id, [FromServices] IApplicationService appService, CancellationToken token) =>
+            {
+                var userResult = await appService.GetUserAsync(id, token);
+                return userResult.ToHttpResult();
+            }).WithName("Get");
+
+        app.MapPatch("/{id:guid}",
+                [AllowAnonymous] static async ([FromRoute] Guid id, [FromBody] PatchUserModel model,
+                    [FromServices] IApplicationService appService,
+                    CancellationToken token) =>
+                {
+                    var authResult = await appService.UpdateUserAsync(id, model, token);
                     return authResult.ToHttpResult();
                 }
             )

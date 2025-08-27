@@ -1,31 +1,24 @@
-﻿using System.Security.Claims;
-using MediatR;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Social.Infrastructure.Communication.Abstractions;
 using Social.Services.Shared.Messages;
 using Social.Services.User.Application.Models;
-using Social.Services.User.Domain.Commands;
-using Social.Services.User.Domain.Queries;
+using Social.Services.User.Domain.Dtos;
+using Social.Services.User.Domain.Services;
 using Social.Shared;
-using Social.Shared.Errors;
 using Unit = Social.Shared.Unit;
 
 namespace Social.Services.User.Application;
 
 public sealed class ApplicationService(
-    IMediator mediator,
-    IHttpContextAccessor httpContextAccessor,
-    IAuthenticationService authService,
+    IUserService userService,
+    IUserFollowService userFollowService,
     ILogger<ApplicationService> logger,
     [FromKeyedServices("user")] IServiceBus serviceBus) : IApplicationService
 {
-    public async Task<Result<AuthUserModel>> RegisterUserAsync(string email, string password,
-        CancellationToken cancellationToken = default)
+    public async Task<Result<UserModel>> CreateUserAsync(string email, CancellationToken cancellationToken = default)
     {
-        var hashedPassword = BCrypt.Net.BCrypt.HashPassword(password);
-        var registeredUserResult = await mediator.Send(new CreateUserCommand(email, hashedPassword), cancellationToken);
+        var registeredUserResult = await userService.CreateUserAsync(new CreateUserDto(email), cancellationToken);
         if (registeredUserResult.IsError)
         {
             logger.LogError(registeredUserResult.Error);
@@ -38,21 +31,17 @@ public sealed class ApplicationService(
         if (!publishResult.IsOk)
             logger.LogError(publishResult.Error);
 
-        var token = authService.Authenticate(registeredUser);
-        var userModel = new UserModel(
+        return new UserModel(
             registeredUser.Id,
             registeredUser.Email,
             registeredUser.UserName,
             registeredUser.FirstName,
             registeredUser.LastName);
-
-        return new AuthUserModel(token, userModel);
     }
 
-    public async Task<Result<AuthUserModel>> LoginUserAsync(string email, string password,
-        CancellationToken cancellationToken = default)
+    public async Task<Result<UserModel>> GetUserAsync(string email, CancellationToken cancellationToken = default)
     {
-        var getUserResult = await mediator.Send(new GetUserByEmailQuery(email), cancellationToken);
+        var getUserResult = await userService.GetUserAsync(new GetUserByEmailDto(email), cancellationToken);
         if (getUserResult.IsError)
         {
             logger.LogError(getUserResult.Error);
@@ -60,15 +49,7 @@ public sealed class ApplicationService(
         }
 
         var user = getUserResult.Value!;
-        if (!BCrypt.Net.BCrypt.Verify(password, user.Password))
-        {
-            var error = new ValidationError("Invalid password");
-            logger.LogError(error);
-            return error;
-        }
-
-        var token = authService.Authenticate(user);
-        var userModel = new UserModel(
+        return new UserModel(
             user.Id,
             user.Email,
             user.UserName,
@@ -76,23 +57,32 @@ public sealed class ApplicationService(
             user.LastName,
             user.FollowersCount,
             user.FollowingsCount);
-
-        return new AuthUserModel(token, userModel);
     }
 
-    public async Task<Result<Unit>> FollowUserAsync(Guid followToUserId, CancellationToken token = default)
+    public async Task<Result<UserModel>> GetUserAsync(Guid id, CancellationToken token = default)
     {
-        var userIdClaim =
-            httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
-        if (userIdClaim is null)
+        var getUserResult = await userService.GetUserAsync(id, token);
+        if (getUserResult.IsError)
         {
-            var error = new Error("Cannot get user ID from http context");
-            logger.LogError(error);
-            return error;
+            logger.LogError(getUserResult.Error);
+            return getUserResult.Error;
         }
 
-        var userId = Guid.Parse(userIdClaim.Value);
-        var result = await mediator.Send(new CreateUserFollowCommand(userId, followToUserId), token);
+        var user = getUserResult.Value!;
+        return new UserModel(
+            user.Id,
+            user.Email,
+            user.UserName,
+            user.FirstName,
+            user.LastName,
+            user.FollowersCount,
+            user.FollowingsCount);
+    }
+
+    public async Task<Result<Unit>> FollowUserAsync(Guid userId, Guid followToUserId, CancellationToken token = default)
+    {
+        var result =
+            await userFollowService.CreateUserFollowAsync(new CreateUserFollowDto(userId, followToUserId), token);
         if (!result.IsError)
         {
             await serviceBus.PublishAsync(new UserFollowCreated(userId, followToUserId), token);
@@ -103,17 +93,11 @@ public sealed class ApplicationService(
         return result.Error;
     }
 
-    public async Task<Result<Unit>> UnfollowUserAsync(Guid unfollowToUserId, CancellationToken token = default)
+    public async Task<Result<Unit>> UnfollowUserAsync(Guid userId, Guid unfollowToUserId,
+        CancellationToken token = default)
     {
-        var userIdResult = GetUserId();
-        if (userIdResult.IsError)
-        {
-            logger.LogError(userIdResult.Error);
-            return userIdResult.Error;
-        }
-
-        var userId = userIdResult.Value;
-        var result = await mediator.Send(new DeleteUserFollowCommand(userId, unfollowToUserId), token);
+        var result =
+            await userFollowService.DeleteUserFollowAsync(new DeleteUserFollowDto(userId, unfollowToUserId), token);
         if (!result.IsError)
         {
             await serviceBus.PublishAsync(new UserFollowDeleted(userId, unfollowToUserId), token);
@@ -124,17 +108,10 @@ public sealed class ApplicationService(
         return result.Error;
     }
 
-    public async Task<Result<Unit>> UpdateUserAsync(PatchUserModel model, CancellationToken token = default)
+    public async Task<Result<Unit>> UpdateUserAsync(Guid userId, PatchUserModel model, CancellationToken token = default)
     {
-        var userIdResult = GetUserId();
-        if (userIdResult.IsError)
-        {
-            logger.LogError(userIdResult.Error);
-            return userIdResult.Error;
-        }
-
-        var userId = userIdResult.Value;
-        var result = await mediator.Send(new UpdateUserCommand(userId, model.UserName, model.FirstName, model.LastName),
+        var result = await userService.UpdateUserAsync(
+            new UpdateUserDto(userId, model.UserName, model.FirstName, model.LastName),
             token);
 
         if (!result.IsError)
@@ -146,17 +123,5 @@ public sealed class ApplicationService(
 
         logger.LogError(result.Error);
         return result.Error;
-    }
-
-    private Result<Guid> GetUserId()
-    {
-        var userIdClaim =
-            httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
-        if (userIdClaim is not null)
-            return Guid.Parse(userIdClaim.Value);
-
-        var error = new Error("Cannot get user ID from http context");
-        logger.LogError(error);
-        return error;
     }
 }
