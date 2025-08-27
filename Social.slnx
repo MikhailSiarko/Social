@@ -1,25 +1,30 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/Compose/">
-    <Project Path="Src\Social.Compose\Social.Compose.csproj" Type="Classic C#" />
+    <Project Path="Src\Social.Compose\Social.Compose.csproj" Type="C#" />
   </Folder>
   <Folder Name="/Infrastructure/">
-    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication.Abstractions\Social.Infrastructure.Communication.Abstractions.csproj" Type="Classic C#" />
-    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication\Social.Infrastructure.Communication.csproj" Type="Classic C#" />
-    <Project Path="Src\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" Type="Classic C#" />
+    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication.Abstractions\Social.Infrastructure.Communication.Abstractions.csproj" Type="C#" />
+    <Project Path="Src\Infrastructure\Social.Infrastructure.Communication\Social.Infrastructure.Communication.csproj" Type="C#" />
+    <Project Path="Src\Infrastructure\Social.Infrastructure.DependencyInjection\Social.Infrastructure.DependencyInjection.csproj" Type="C#" />
   </Folder>
   <Folder Name="/Services/">
-    <Project Path="Src\Services\Social.Services.Monitoring\Social.Services.Monitoring.csproj" Type="Classic C#" />
-    <Project Path="Src\Services\Social.Services.Shared\Social.Services.Shared.csproj" Type="Classic C#" />
+    <Project Path="Src\Services\Social.Services.Monitoring\Social.Services.Monitoring.csproj" Type="C#" />
+    <Project Path="Src\Services\Social.Services.Shared\Social.Services.Shared.csproj" Type="C#" />
+  </Folder>
+  <Folder Name="/Services/Search/">
+    <Project Path="Src\Services\Search\Social.Services.Search.Api\Social.Services.Search.Api.csproj" Type="C#" />
+    <Project Path="Src\Services\Search\Social.Services.Search.Application\Social.Services.Search.Application.csproj" Type="C#" />
+    <Project Path="Src\Services\Search\Social.Services.Search.Persistence\Social.Services.Search.Persistence.csproj" Type="C#" />
   </Folder>
   <Folder Name="/Services/User/">
-    <Project Path="Src\Services\User\Social.Services.User.Api\Social.Services.User.Api.csproj" Type="Classic C#" />
-    <Project Path="Src\Services\User\Social.Services.User.Application\Social.Services.User.Application.csproj" Type="Classic C#" />
-    <Project Path="Src\Services\User\Social.Services.User.Domain\Social.Services.User.Domain.csproj" Type="Classic C#" />
-    <Project Path="Src\Services\User\Social.Services.User.Persistence\Social.Services.User.Persistence.csproj" Type="Classic C#" />
+    <Project Path="Src\Services\User\Social.Services.User.Api\Social.Services.User.Api.csproj" Type="C#" />
+    <Project Path="Src\Services\User\Social.Services.User.Application\Social.Services.User.Application.csproj" Type="C#" />
+    <Project Path="Src\Services\User\Social.Services.User.Domain\Social.Services.User.Domain.csproj" Type="C#" />
+    <Project Path="Src\Services\User\Social.Services.User.Persistence\Social.Services.User.Persistence.csproj" Type="C#" />
   </Folder>
   <Folder Name="/Tests/" />
   <Folder Name="/Tests/User/">
-    <Project Path="Src\Tests\Services\User\Social.Services.User.Domain.Tests\Social.Services.User.Domain.Tests.csproj" Type="Classic C#" />
+    <Project Path="Src\Tests\Services\User\Social.Services.User.Domain.Tests\Social.Services.User.Domain.Tests.csproj" Type="C#" />
   </Folder>
-  <Project Path="Src\Social.Shared\Social.Shared.csproj" Type="Classic C#" />
+  <Project Path="Src\Social.Shared\Social.Shared.csproj" Type="C#" />
 </Solution>

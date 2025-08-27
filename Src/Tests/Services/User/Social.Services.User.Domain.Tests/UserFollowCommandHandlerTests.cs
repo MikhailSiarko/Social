@@ -1,6 +1,8 @@
 ﻿using Moq;
-using Social.Services.User.Domain.Commands;
+using Social.Services.User.Domain.Dtos;
+using Social.Services.User.Domain.Models;
 using Social.Services.User.Domain.Persistence;
+using Social.Services.User.Domain.Services;
 using Social.Shared;
 using Social.Shared.Errors;
 
@@ -20,11 +22,11 @@ public class UserFollowCommandHandlerTests
         userRepositoryMock.Setup(x => x.ExistsAsync(followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NotFound(null!));
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new CreateUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new CreateUserFollowDto(userId, followedUserId);
 
         // Act
-        _ = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.CreateUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userFollowRepositoryMock.Verify(x => x.AddAsync(userId, followedUserId, It.IsAny<CancellationToken>()),
@@ -42,11 +44,11 @@ public class UserFollowCommandHandlerTests
         userRepositoryMock.Setup(x => x.ExistsAsync(followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NotFound(null!));
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new CreateUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new CreateUserFollowDto(userId, followedUserId);
 
         // Act
-        _ = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.CreateUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userRepositoryMock.Verify(
@@ -64,11 +66,11 @@ public class UserFollowCommandHandlerTests
         userRepositoryMock.Setup(x => x.ExistsAsync(followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Unit.Value);
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new CreateUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new CreateUserFollowDto(userId, followedUserId);
 
         // Act
-        _ = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.CreateUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userFollowRepositoryMock.Verify(x => x.AddAsync(userId, followedUserId, It.IsAny<CancellationToken>()),
@@ -86,11 +88,11 @@ public class UserFollowCommandHandlerTests
         userRepositoryMock.Setup(x => x.ExistsAsync(followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Unit.Value);
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new CreateUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new CreateUserFollowDto(userId, followedUserId);
 
         // Act
-        var result = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.CreateUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userRepositoryMock.Verify(
@@ -108,11 +110,11 @@ public class UserFollowCommandHandlerTests
         userFollowRepositoryMock.Setup(x => x.DeleteAsync(userId, followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Error("User not found"));
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new DeleteUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new DeleteUserFollowDto(userId, followedUserId);
 
         // Act
-        _ = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.DeleteUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userRepositoryMock.Verify(x => x.UpdateFollowInfoAsync(userId, followedUserId, true, It.IsAny<CancellationToken>()),
@@ -130,11 +132,11 @@ public class UserFollowCommandHandlerTests
         userFollowRepositoryMock.Setup(x => x.DeleteAsync(userId, followedUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Unit.Value);
 
-        var commandHandler = new UserFollowCommandHandler(userFollowRepositoryMock.Object, userRepositoryMock.Object);
-        var createUserCommand = new DeleteUserFollowCommand(userId, followedUserId);
+        var commandHandler = new UserFollowService(userRepositoryMock.Object, userFollowRepositoryMock.Object);
+        var createUserCommand = new DeleteUserFollowDto(userId, followedUserId);
 
         // Act
-        var result = await commandHandler.Handle(createUserCommand, CancellationToken.None);
+        _ = await commandHandler.DeleteUserFollowAsync(createUserCommand, CancellationToken.None);
 
         // Assert
         userRepositoryMock.Verify(

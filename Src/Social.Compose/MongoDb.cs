@@ -2,7 +2,7 @@
 
 public static class MongoDb
 {
-    public static IResourceBuilder<MongoDBServerResource> AddMongoDb(this IDistributedApplicationBuilder builder,
+    public static IResourceBuilder<MongoDBServerResource> AddMongoServer(this IDistributedApplicationBuilder builder,
         string serviceName)
     {
         var mongodb = builder

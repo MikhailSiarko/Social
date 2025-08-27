@@ -11,7 +11,6 @@ public static class Converter
         {
             Id = user.Id,
             Email = user.Email,
-            Password = user.Password,
             AvatarUrl = user.AvatarUrl,
             UserName = user.UserName,
             FirstName = user.FirstName,
@@ -28,7 +27,6 @@ public static class Converter
         {
             Id = user.Id,
             Email = user.Email,
-            Password = user.Password,
             UserName = user.UserName,
             FirstName = user.FirstName,
             LastName = user.LastName,

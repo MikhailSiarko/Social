@@ -20,12 +20,12 @@ public readonly struct Result<TOk>
         IsError = true;
     }
 
-    [MemberNotNullWhen(true, "Value")]
-    [MemberNotNullWhen(false, "Error")]
+    [MemberNotNullWhen(true, nameof(Value))]
+    [MemberNotNullWhen(false, nameof(Error))]
     public bool IsOk { get; }
 
-    [MemberNotNullWhen(true, "Error")]
-    [MemberNotNullWhen(false, "Value")]
+    [MemberNotNullWhen(true, nameof(Error))]
+    [MemberNotNullWhen(false, nameof(Value))]
     public bool IsError { get; }
 
     public static implicit operator Result<TOk>(TOk value) => FromValue(value);
