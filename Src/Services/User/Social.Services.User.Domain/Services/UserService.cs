@@ -7,7 +7,7 @@ using Social.Shared.Errors;
 
 namespace Social.Services.User.Domain.Services;
 
-internal class UserService(IUserRepository userRepository) : IUserService
+internal sealed class UserService(IUserRepository userRepository) : IUserService
 {
     public async Task<Result<Models.User>> CreateUserAsync(CreateUserDto dto, CancellationToken cancellationToken)
     {
