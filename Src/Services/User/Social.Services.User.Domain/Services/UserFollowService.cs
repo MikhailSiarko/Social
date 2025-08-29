@@ -7,7 +7,7 @@ using Social.Shared.Errors;
 
 namespace Social.Services.User.Domain.Services;
 
-internal class UserFollowService(
+internal sealed class UserFollowService(
     IUserRepository userRepository,
     IUserFollowRepository userFollowRepository) : IUserFollowService
 {
